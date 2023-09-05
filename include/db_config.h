@@ -45,6 +45,7 @@ enum class HTTPStatus : std::uint32_t {
     Conflict               = 409,
     Gone                   = 410,
     LengthRQD              = 411,
+    UnprocessableEntity    = 422,
     InternalServerError    = 500
 };
 

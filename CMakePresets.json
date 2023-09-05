@@ -7,7 +7,7 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
-      "toolchainFile": "$env{HOME}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "toolchainFile": "c:/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "cl.exe",
         "CMAKE_CXX_COMPILER": "cl.exe"
@@ -19,7 +19,7 @@
       }
     },
     {
-      "name": "x64-debug-win",
+      "name": "windows-debug",
       "displayName": "x64 Debug Windows",
       "inherits": "windows-base",
       "architecture": {
@@ -31,9 +31,9 @@
       }
     },
     {
-      "name": "x64-release-win",
+      "name": "windows-release",
       "displayName": "x64 Release Windows",
-      "inherits": "x64-debug",
+      "inherits": "windows-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -96,33 +96,6 @@
           "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
         }
       }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "default-build-linux",
-      "displayName": "Default",
-      "configurePreset": "linux-debug",
-      "description": "Vanilla build"
-    },
-    {
-      "name": "default-build-windows",
-      "displayName": "Default",
-      "configurePreset": "x64-debug",
-      "description": "Vanilla build"
-    },
-    {
-      "name": "verbose-build-linux",
-      "displayName": "Verbose Build",
-      "description": "Passes -v to Ninja",
-      "configurePreset": "linux-debug",
-      "nativeToolOptions": [ "-v" ]
-    },
-    {
-      "name": "verbose-build-windows",
-      "displayName": "Verbose Build",
-      "configurePreset": "x64-debug",
-      "inherits": "verbose-build-linux"
     }
   ]
 }
