@@ -360,10 +360,12 @@ int main(void)
     app.loglevel(crow::LogLevel::Critical);
 
     try {
-        app.port(9999).multithreaded().run();
+        //app.port(9999).multithreaded().run();
+        app.port(9999).concurrency(API_MAX_THREADS).run();
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;
     }
+
     pq_conn_pool::instance()->release_pool();
 }

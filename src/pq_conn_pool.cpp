@@ -86,7 +86,7 @@ pq_conn_pool* pq_conn_pool::instance()
         std::string connstr = "dbname=" + db_config::dbname + " user=" + db_config::user +
                               " password=" + db_config::password +
                               " hostaddr=" + db_config::hostname + " port=" + db_config::port;
-        instance_ = new pq_conn_pool(connstr, 10);
+        instance_ = new pq_conn_pool(connstr, API_MAX_THREADS);
     }
     return instance_;
 }
