@@ -286,7 +286,7 @@ int main(void)
 
     try {
         //app.port(9999).multithreaded().run();
-        app.port(9999).concurrency(API_MAX_THREADS).run();
+        app.port(3000).concurrency(API_MAX_THREADS).run();
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;
