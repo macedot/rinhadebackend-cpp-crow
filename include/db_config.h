@@ -10,7 +10,7 @@
 constexpr auto API_MAX_THREADS = 10;
 
 namespace db_config {
-static std::string hostname = "127.0.0.1";
+static std::string hostname = "database";
 static std::string user     = "postgres";
 static std::string password = "password";
 static std::string dbname   = "postgres";
