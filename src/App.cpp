@@ -41,32 +41,6 @@ std::string get_uuid()
     return res;
 }
 
-// execute a transactional SQL
-bool executeSQL(const std::string& sql)
-{
-    bool bsuccess = false;
-    auto instance = pq_conn_pool::init("db.string", API_MAX_THREADS);
-    auto dbconn   = instance->burrow();
-    try {
-        if (!dbconn->is_open()) {
-            throw std::runtime_error("Open database failed");
-        }
-
-        pqxx::work   work(*dbconn);
-        pqxx::result res(work.exec(sql));
-        work.commit();
-
-        if (res.affected_rows() > 0)
-            bsuccess = true;
-    }
-    catch (const std::exception& ex) {
-        //std::cerr << "executeSQL failed: " << ex.what() << std::endl;
-        bsuccess = false;
-    }
-    instance->unburrow(dbconn);
-    return bsuccess;
-}
-
 int add_pessoa(Pessoa& pessoa)
 {
     auto              instance  = pq_conn_pool::instance();
@@ -186,51 +160,11 @@ std::string readFile2(const std::string& fileName)
 
 int main(void)
 {
-    const auto conn_string = readFile2("db.string");
-    auto       instance    = pq_conn_pool::init(conn_string, API_MAX_THREADS);
+    auto instance = pq_conn_pool::init(readFile2("db.string"), API_MAX_THREADS);
     if (!instance) {
         std::cerr << "FATAL Unable to connect to db!" << std::endl;
         return -1;
     }
-
-    // executeSQL(R"(
-    //     CREATE TABLE IF NOT EXISTS public.pessoas (
-    //         id          uuid NOT NULL,
-    //         apelido     text NOT NULL,
-    //         nome        text NOT NULL,
-    //         nascimento  text NOT NULL,
-    //         stack       text
-    //     );
-
-    //     ALTER TABLE ONLY public.pessoas
-    //         ADD CONSTRAINT pessoas_pkey PRIMARY KEY (id);
-
-    //     CREATE UNIQUE INDEX pessoas_apelido_index ON public.pessoas
-    //         USING btree (apelido);
-    // )");
-
-    executeSQL(R"(
-        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-        CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-
-        CREATE OR REPLACE FUNCTION generate_searchable(_nome VARCHAR, _apelido VARCHAR, _stack JSON)
-        RETURNS TEXT AS $$
-        BEGIN
-        RETURN _nome || _apelido || _stack;
-        END;
-        $$ LANGUAGE plpgsql IMMUTABLE;
-
-        CREATE TABLE IF NOT EXISTS pessoas (
-            id          UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
-            apelido     TEXT UNIQUE NOT NULL,
-            nome        TEXT NOT NULL,
-            nascimento  DATE NOT NULL,
-            stack       TEXT,
-            searchable  TEXT GENERATED ALWAYS AS (generate_searchable(nome, apelido, stack)) STORED
-        );
-
-        CREATE UNIQUE INDEX IF NOT EXISTS pessoas_apelido_index ON public.pessoas USING btree (apelido);
-    )");
 
     crow::SimpleApp app;
 
@@ -241,8 +175,9 @@ int main(void)
     ([]() {
         int64_t   total    = 0;
         const int response = contagem_pessoas(total);
-        if (response != 200) // Not found
+        if (response != 200) {
             return crow::response(response);
+        }
         crow::json::wvalue result;
         result["total"] = total;
         return crow::response(response, result); // Created
@@ -251,14 +186,17 @@ int main(void)
     CROW_ROUTE(app, "/pessoas").methods("POST"_method)([](const crow::request& req) {
         if (req.method == "POST"_method) {
             auto msg = crow::json::load(req.body);
-            if (!msg)
+            if (!msg) {
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+            }
 
             auto valida_param_str = [msg](const char* param) -> uint32_t {
-                if (!msg.has(param) || msg[param].t() == crow::json::type::Null)
+                if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
                     return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
-                if (msg[param].t() != crow::json::type::String)
+                }
+                if (msg[param].t() != crow::json::type::String) {
                     return HTTP::to_uint(HTTPStatus::BadRequest);
+                }
                 return 0;
             };
 
@@ -277,8 +215,9 @@ int main(void)
             std::optional<std::string> stack;
             if (msg.has("stack")) {
                 if (msg["stack"].t() == crow::json::type::List) {
-                    if (!join(msg["stack"], stack))
+                    if (!join(msg["stack"], stack)) {
                         return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+                    }
                 }
                 else if (msg["stack"].t() != crow::json::type::Null) {
                     return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
@@ -290,8 +229,10 @@ int main(void)
             };
 
             const int response = add_pessoa(pessoa);
-            if (response != 201) // UnprocessableEntity
+            if (response != 201) {
+                // UnprocessableEntity
                 return crow::response(response);
+            }
 
             auto res = crow::response(response); // Created
             res.set_header("Location", "http://localhost:9999/pessoas/" + pessoa.id);
@@ -303,33 +244,44 @@ int main(void)
 
     CROW_ROUTE(app, "/pessoas/<string>")
       .methods("GET"_method)([=](const crow::request& req, const std::string& id) {
-          if (req.method == "GET"_method) {
-              if (id.empty()) {
-                  return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
-              }
-
-              Pessoa pessoa;
-              int    response = get_pessoa(id, pessoa);
-              if (response != 200) // Not found
-                  return crow::response(response);
-
-              crow::json::wvalue result;
-              result["id"]         = pessoa.id;
-              result["apelido"]    = pessoa.apelido;
-              result["nome"]       = pessoa.nome;
-              result["nascimento"] = pessoa.nascimento;
-              if (pessoa.stack)
-                  result["stack"] = pessoa.stack.value();
-              return crow::response(response, result);
+          if (req.method != "GET"_method) {
+              return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
           }
-          return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+          if (id.empty()) {
+              return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+          }
+
+          Pessoa pessoa;
+          int    response = get_pessoa(id, pessoa);
+          if (response != 200) {
+              return crow::response(response);
+          }
+
+          crow::json::wvalue result;
+          result["id"]         = pessoa.id;
+          result["apelido"]    = pessoa.apelido;
+          result["nome"]       = pessoa.nome;
+          result["nascimento"] = pessoa.nascimento;
+          if (pessoa.stack) {
+              std::vector<std::string> stack;
+              std::stringstream        s_stream(pessoa.stack.value());
+              std::string              substr;
+              while (s_stream.good()) {
+                  getline(s_stream, substr, ',');
+                  stack.push_back(substr);
+              }
+              result["stack"] = stack;
+          }
+          return crow::response(response, result);
       });
 
     app.loglevel(crow::LogLevel::Critical);
 
     try {
+        CROW_LOG_INFO << "Crow: START";
         //app.port(9999).multithreaded().run();
         app.port(3000).concurrency(API_MAX_THREADS).run();
+        CROW_LOG_INFO << "Crow: STOP";
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;
