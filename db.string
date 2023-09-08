@@ -1,0 +1,1 @@
+dbname=postgres user=postgres password=password hostaddr=TRDELNIK.local port=5432

@@ -1,9 +1,8 @@
 #include "pq_conn_pool.h"
-#include "db_config.h"
 
 pq_conn_pool* pq_conn_pool::instance_ = nullptr;
 
-pq_conn_pool::pq_conn_pool(std::string conn_string, size_t maxsize)
+pq_conn_pool::pq_conn_pool(const std::string& conn_string, size_t maxsize)
   : cursize_(0)
   , maxsize_(maxsize)
   , conn_string_(conn_string)
@@ -82,11 +81,13 @@ void pq_conn_pool::release_connection(pqconnptr conn)
 
 pq_conn_pool* pq_conn_pool::instance()
 {
+    return instance_;
+}
+
+pq_conn_pool* pq_conn_pool::init(const std::string& conn_string, size_t maxsize)
+{
     if (instance_ == nullptr) {
-        std::string connstr = "dbname=" + db_config::dbname + " user=" + db_config::user +
-                              " password=" + db_config::password +
-                              " hostaddr=" + db_config::hostname + " port=" + db_config::port;
-        instance_ = new pq_conn_pool(connstr, API_MAX_THREADS);
+        instance_ = new pq_conn_pool(conn_string, maxsize);
     }
     return instance_;
 }

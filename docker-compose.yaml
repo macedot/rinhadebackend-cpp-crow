@@ -5,6 +5,8 @@ services:
     #image: docker.io/akitaonrails/rinhabackend-crystal:latest
     build: .
     hostname: api1
+    volumes:
+      - ./db.string:/service/db.string
     depends_on:
       database:
         condition: service_healthy

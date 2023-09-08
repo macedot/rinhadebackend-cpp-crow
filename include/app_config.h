@@ -1,21 +1,11 @@
 #pragma once
 
-#ifndef _DB_CONFIG_
-#define _DB_CONFIG_
+#ifndef _APP_CONFIG_
+#define _APP_CONFIG_
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
-
-constexpr auto API_MAX_THREADS = 10;
-
-namespace db_config {
-static std::string hostname = "database";
-static std::string user     = "postgres";
-static std::string password = "password";
-static std::string dbname   = "postgres";
-static std::string port     = "5432";
-}
 
 /**
 *  @brief
@@ -54,4 +44,4 @@ class HTTP {
     static uint32_t to_uint(HTTPStatus status) { return static_cast<std::size_t>(status); }
 };
 
-#endif //_DB_CONFIG_
+#endif //_APP_CONFIG_

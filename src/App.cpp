@@ -6,8 +6,10 @@
 #include <fmt/format.h>
 
 #include "pq_conn_pool.h"
-#include "db_config.h"
+#include "app_config.h"
 #include "uuid.h"
+
+constexpr auto API_MAX_THREADS = 10;
 
 struct Pessoa {
     std::string                id{};
@@ -43,7 +45,7 @@ std::string get_uuid()
 bool executeSQL(const std::string& sql)
 {
     bool bsuccess = false;
-    auto instance = pq_conn_pool::instance();
+    auto instance = pq_conn_pool::init("db.string", API_MAX_THREADS);
     auto dbconn   = instance->burrow();
     try {
         if (!dbconn->is_open()) {
@@ -171,22 +173,63 @@ auto join(const crow::json::rvalue& elems, std::optional<std::string>& stack) ->
     return true;
 };
 
+// https://stackoverflow.com/questions/524591/performance-of-creating-a-c-stdstring-from-an-input-iterator/524843#524843
+std::string readFile2(const std::string& fileName)
+{
+    std::ifstream ifs(fileName.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
+    const std::ifstream::pos_type fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+    std::vector<char> bytes(fileSize);
+    ifs.read(bytes.data(), fileSize);
+    return std::string(bytes.data(), fileSize);
+}
+
 int main(void)
 {
+    const auto conn_string = readFile2("db.string");
+    auto       instance    = pq_conn_pool::init(conn_string, API_MAX_THREADS);
+    if (!instance) {
+        std::cerr << "FATAL Unable to connect to db!" << std::endl;
+        return -1;
+    }
+
+    // executeSQL(R"(
+    //     CREATE TABLE IF NOT EXISTS public.pessoas (
+    //         id          uuid NOT NULL,
+    //         apelido     text NOT NULL,
+    //         nome        text NOT NULL,
+    //         nascimento  text NOT NULL,
+    //         stack       text
+    //     );
+
+    //     ALTER TABLE ONLY public.pessoas
+    //         ADD CONSTRAINT pessoas_pkey PRIMARY KEY (id);
+
+    //     CREATE UNIQUE INDEX pessoas_apelido_index ON public.pessoas
+    //         USING btree (apelido);
+    // )");
+
     executeSQL(R"(
-        CREATE TABLE IF NOT EXISTS public.pessoas (
-            id          uuid NOT NULL,
-            apelido     text NOT NULL,
-            nome        text NOT NULL,
-            nascimento  text,
-            stack       text
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+        CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+        CREATE OR REPLACE FUNCTION generate_searchable(_nome VARCHAR, _apelido VARCHAR, _stack JSON)
+        RETURNS TEXT AS $$
+        BEGIN
+        RETURN _nome || _apelido || _stack;
+        END;
+        $$ LANGUAGE plpgsql IMMUTABLE;
+
+        CREATE TABLE IF NOT EXISTS pessoas (
+            id          UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
+            apelido     TEXT UNIQUE NOT NULL,
+            nome        TEXT NOT NULL,
+            nascimento  DATE NOT NULL,
+            stack       TEXT,
+            searchable  TEXT GENERATED ALWAYS AS (generate_searchable(nome, apelido, stack)) STORED
         );
 
-        ALTER TABLE ONLY public.pessoas
-            ADD CONSTRAINT pessoas_pkey PRIMARY KEY (id);
-
-        CREATE UNIQUE INDEX pessoas_apelido_index ON public.pessoas
-            USING btree (apelido);
+        CREATE UNIQUE INDEX IF NOT EXISTS pessoas_apelido_index ON public.pessoas USING btree (apelido);
     )");
 
     crow::SimpleApp app;

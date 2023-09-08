@@ -13,6 +13,7 @@ typedef std::shared_ptr<pqxx::connection> pqconnptr;
 
 class pq_conn_pool {
   public:
+    static pq_conn_pool* init(const std::string& conn_string, size_t maxsize);
     static pq_conn_pool* instance();
     ~pq_conn_pool();
     void      release_pool();
@@ -24,7 +25,7 @@ class pq_conn_pool {
     pq_conn_pool& operator=(const pq_conn_pool&) = delete;
 
   private:
-    pq_conn_pool(std::string conn_string, size_t maxsize);
+    pq_conn_pool(const std::string& conn_string, size_t maxsize);
     void init_conn(size_t size);
     void release_connection(pqconnptr conn);
 

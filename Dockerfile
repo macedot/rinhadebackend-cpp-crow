@@ -18,6 +18,6 @@ RUN cmake ..  -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/service/vcpkg/s
 FROM debian:12-slim
 WORKDIR /service
 COPY --from=build /service/build/api-cpp-crow-exe /service
+COPY --from=build /service/db.string /service
 EXPOSE 3000 3000
 ENTRYPOINT ["/service/api-cpp-crow-exe"]
-
