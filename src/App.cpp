@@ -8,9 +8,8 @@
 
 #include "pq_conn_pool.h"
 #include "app_config.h"
-#include "uuid.h"
 
-constexpr auto API_MAX_THREADS = 20;
+constexpr auto API_MAX_THREADS = 50;
 
 struct Pessoa {
     std::string                id{};
@@ -21,7 +20,7 @@ struct Pessoa {
 
     std::string insert_fields() const
     {
-        std::string res = std::string{ "id,apelido,nome,nascimento" };
+        std::string res = std::string{ "apelido,nome,nascimento" };
         if (stack) {
             res += ",stack";
         }
@@ -30,18 +29,13 @@ struct Pessoa {
 
     std::string insert_values() const
     {
-        std::string res = fmt::format("'{}','{}','{}','{}'", id, apelido, nome, nascimento);
+        std::string res = fmt::format("'{}','{}','{}'", apelido, nome, nascimento);
         if (stack) {
             res += fmt::format(",'{}'", stack.value());
         }
         return res;
     }
 };
-
-std::string get_uuid()
-{
-    return uuid::v4::UUID::New().String();
-}
 
 auto join(const crow::json::rvalue& elems, std::optional<std::string>& stack) -> bool
 {
@@ -92,7 +86,7 @@ auto add_pessoa(Pessoa& pessoa) -> int
         pqxx::result res(work.exec(insertsql));
         work.commit();
         // Getting the id of a newly inserted row (user data)
-        for (const auto c : res) {
+        for (const auto& c : res) {
             pessoa.id = c[0].as<std::string>();
         }
     }
@@ -179,7 +173,7 @@ auto contagem_pessoas(int64_t& total) -> int64_t
     try {
         pqxx::nontransaction work(*dbconn);
         pqxx::result         res(work.exec("SELECT COUNT(*) FROM pessoas;"));
-        for (const auto c : res) {
+        for (const auto& c : res) {
             total = c[0].as<int64_t>();
         }
     }
@@ -269,7 +263,7 @@ int main(void)
             }
 
             Pessoa pessoa = {
-                get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
+                "", msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
             };
 
             const int response = add_pessoa(pessoa);
@@ -284,13 +278,12 @@ int main(void)
         }
 
         if (req.method == "GET"_method) {
-            auto t = req.url_params.get("t");
-            if (!t) {
+            auto query = req.url_params.get("t");
+            if (!query) {
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
             std::list<Pessoa> pessoas;
-            const auto        query    = crow::utility::lexical_cast<std::string>(t);
             const auto        response = get_pessoas(pessoas, query);
             if (response != 200) {
                 return crow::response(response);
@@ -344,9 +337,9 @@ int main(void)
     app.loglevel(crow::LogLevel::Critical);
 
     try {
-        CROW_LOG_INFO << "Crow: START";
+        std::cout << "Crow: START\n";
         app.port(3000).concurrency(API_MAX_THREADS).run();
-        CROW_LOG_INFO << "Crow: STOP";
+        std::cout << "Crow: STOP\n";
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;

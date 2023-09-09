@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.pessoas (
     nome        TEXT NOT NULL,
     nascimento  DATE NOT NULL,
     stack       TEXT,
-    searchable  TEXT GENERATED ALWAYS AS (generate_searchable(nome, apelido, stack)) STORED
+    searchable  TEXT GENERATED ALWAYS AS (generate_searchable(nome, apelido, COALESCE(stack, ''))) STORED
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS pessoas_apelido_index

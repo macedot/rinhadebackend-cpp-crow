@@ -1,1 +1,1 @@
-dbname=postgres user=postgres password=password host=database port=5432
+dbname=postgres user=postgres password=password host=localhost port=5432

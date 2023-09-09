@@ -36,3 +36,5 @@ build/
 out/
 .vscode/
 .vs/
+/vs/vcpkg_install
+/vs/x64
