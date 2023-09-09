@@ -1,62 +1,56 @@
 #include <iostream>
+#include <chrono>
 #include <string>
-#include <optional>
-
-#include <crow.h>
+#include <thread>
 
 #include <fmt/format.h>
 
+#define UUID_SYSTEM_GENERATOR
+#include "uuid.h"
+
 #include "pq_conn_pool.h"
 #include "app_config.h"
+#include "ts_unordered_set.hpp"
+#include "ts_queue.hpp"
+
+#include <crow.h>
 
 constexpr auto API_PORT        = 3000;
 constexpr auto API_MAX_THREADS = 25;
 
 struct Pessoa {
-    std::string                id{};
-    std::string                apelido{};
-    std::string                nome{};
-    std::string                nascimento{};
-    std::optional<std::string> stack = std::nullopt;
-
-    std::string insert_fields() const
-    {
-        std::string res = std::string{ "apelido,nome,nascimento" };
-        if (stack) {
-            res += ",stack";
-        }
-        return res;
-    }
-
-    std::string insert_values() const
-    {
-        std::string res = fmt::format("'{}','{}','{}'", apelido, nome, nascimento);
-        if (stack) {
-            res += fmt::format(",'{}'", stack.value());
-        }
-        return res;
-    }
+    std::string id{};
+    std::string apelido{};
+    std::string nome{};
+    std::string nascimento{};
+    std::string stack{};
 };
 
-auto join(const crow::json::rvalue& elems, std::optional<std::string>& stack) -> bool
+ts_unordered_set<std::string> cache_apelido;
+ts_queue<Pessoa>              queue_pessoas;
+
+std::string get_uuid()
 {
-    std::string res;
+    return uuids::to_string(uuids::uuid_system_generator{}());
+}
+
+auto join(const crow::json::rvalue& elems, std::string& stack) -> bool
+{
     if (elems.size() > 0) {
         if (elems[0].t() != crow::json::type::String) {
             return false;
         }
-        res += elems[0].s();
+        stack += elems[0].s();
         if (elems.size() > 1) {
             for (size_t i = 1; i < elems.size(); ++i) {
                 if (elems[i].t() != crow::json::type::String) {
                     return false;
                 }
-                res += ",";
-                res += elems[i].s();
+                stack += ",";
+                stack += elems[i].s();
             }
         }
     }
-    stack = res;
     return true;
 };
 
@@ -77,24 +71,25 @@ auto add_pessoa(Pessoa& pessoa) -> int
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
     const std::string insertsql = fmt::format(
-      "INSERT INTO pessoas ({}) "
-      "VALUES ({}) RETURNING id;",
-      pessoa.insert_fields(),
-      pessoa.insert_values());
+      "INSERT INTO pessoas (id,apelido,nome,nascimento,stack) "
+      "VALUES ('{}','{}','{}','{}','{}');",
+      pessoa.id,
+      pessoa.apelido,
+      pessoa.nome,
+      pessoa.nascimento,
+      pessoa.stack);
+
     try {
         // Execute SQL query on PostgreSQL
         pqxx::work   work(*dbconn);
         pqxx::result res(work.exec(insertsql));
         work.commit();
-        // Getting the id of a newly inserted row (user data)
-        for (const auto& c : res) {
-            pessoa.id = c[0].as<std::string>();
-        }
     }
     catch (const std::exception& ex) {
         CROW_LOG_ERROR << __func__ << ": " << ex.what();
         pessoa.id.clear();
     }
+
     instance->unburrow(dbconn);
     return (!pessoa.id.empty()) ? HTTP::to_uint(HTTPStatus::Created)
                                 : HTTP::to_uint(HTTPStatus::BadRequest);
@@ -107,9 +102,7 @@ auto map_result_pessoa(const pqxx::result::const_iterator& c) -> Pessoa
     pessoa.apelido    = c[1].as<std::string>();
     pessoa.nome       = c[2].as<std::string>();
     pessoa.nascimento = c[3].as<std::string>();
-    if (!c[4].is_null()) {
-        pessoa.stack = c[4].as<std::string>();
-    }
+    pessoa.stack      = c[4].as<std::string>();
     return pessoa;
 }
 
@@ -140,6 +133,19 @@ auto get_pessoa(const std::string& id, Pessoa& pessoa) -> int
     return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
+std::string str_tolower(std::string s)
+{
+    std::transform(s.begin(),
+                   s.end(),
+                   s.begin(),
+                   // static_cast<int(*)(int)>(std::tolower)         // wrong
+                   // [](int c){ return std::tolower(c); }           // wrong
+                   // [](char c){ return std::tolower(c); }          // wrong
+                   [](unsigned char c) { return std::tolower(c); } // correct
+    );
+    return s;
+}
+
 auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
 {
     auto              instance  = pq_conn_pool::instance();
@@ -147,9 +153,9 @@ auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
     const std::string selectsql = fmt::format(
       "SELECT id,apelido,nome,nascimento,stack"
       " FROM pessoas"
-      " WHERE searchable ILIKE '%{}%'"
+      " WHERE searchable LIKE '%{}%'"
       " LIMIT 50",
-      query);
+      str_tolower(query));
     int nrow = -1;
     try {
         pqxx::nontransaction work(*dbconn);
@@ -229,29 +235,29 @@ int main(void)
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
-            // auto valida_param_str = [msg](const char* param) -> uint32_t {
-            //     if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
-            //         return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
-            //     }
-            //     if (msg[param].t() != crow::json::type::String) {
-            //         return HTTP::to_uint(HTTPStatus::BadRequest);
-            //     }
-            //     return 0;
-            // };
+            auto valida_param_str = [msg](const char* param) -> uint32_t {
+                if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
+                    return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
+                }
+                if (msg[param].t() != crow::json::type::String) {
+                    return HTTP::to_uint(HTTPStatus::BadRequest);
+                }
+                return 0;
+            };
 
-            // if (auto res = valida_param_str("apelido"); res > 0) {
-            //     return crow::response(res);
-            // }
+            if (auto res = valida_param_str("apelido"); res > 0) {
+                return crow::response(res);
+            }
 
-            // if (auto res = valida_param_str("nome"); res > 0) {
-            //     return crow::response(res);
-            // }
+            if (auto res = valida_param_str("nome"); res > 0) {
+                return crow::response(res);
+            }
 
-            // if (auto res = valida_param_str("nascimento"); res > 0) {
-            //     return crow::response(res);
-            // }
+            if (auto res = valida_param_str("nascimento"); res > 0) {
+                return crow::response(res);
+            }
 
-            std::optional<std::string> stack;
+            std::string stack{};
             if (msg.has("stack")) {
                 if (msg["stack"].t() == crow::json::type::List) {
                     if (!join(msg["stack"], stack)) {
@@ -264,16 +270,17 @@ int main(void)
             }
 
             Pessoa pessoa = {
-                "", msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
+                get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
             };
 
-            const int response = add_pessoa(pessoa);
-            if (response != 201) {
-                // UnprocessableEntity
-                return crow::response(response);
+            if (cache_apelido.exists(pessoa.apelido)) {
+                return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
-            auto res = crow::response(response); // Created
+            cache_apelido.emplace(pessoa.apelido);
+            queue_pessoas.push(pessoa);
+
+            auto res = crow::response(HTTP::to_uint(HTTPStatus::Created));
             res.set_header("Location", "http://localhost:9999/pessoas/" + pessoa.id);
             return res;
         }
@@ -297,8 +304,8 @@ int main(void)
                 result[index]["apelido"]    = pessoa.apelido;
                 result[index]["nome"]       = pessoa.nome;
                 result[index]["nascimento"] = pessoa.nascimento;
-                if (pessoa.stack) {
-                    result[index]["stack"] = split(pessoa.stack.value());
+                if (!pessoa.stack.empty()) {
+                    result[index]["stack"] = split(pessoa.stack);
                 }
                 ++index;
             }
@@ -329,22 +336,36 @@ int main(void)
           result["apelido"]    = pessoa.apelido;
           result["nome"]       = pessoa.nome;
           result["nascimento"] = pessoa.nascimento;
-          if (pessoa.stack) {
-              result["stack"] = split(pessoa.stack.value());
+          if (!pessoa.stack.empty()) {
+              result["stack"] = split(pessoa.stack);
           }
           return crow::response(response, result);
       });
 
     app.loglevel(crow::LogLevel::Critical);
 
+    std::jthread proc_queue_pessoas([](std::stop_token stoken) {
+        while (!(stoken.stop_requested())) {
+            while (!queue_pessoas.empty()) {
+                auto pessoa = queue_pessoas.pop();
+                add_pessoa(pessoa);
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
     try {
-        std::cout << fmt::format("Crow: START; port={}; threads={};\n", API_PORT, API_MAX_THREADS);
+        std::cout << fmt::format("API: START; port={}; threads={};\n", API_PORT, API_MAX_THREADS);
         app.port(API_PORT).concurrency(API_MAX_THREADS).run();
-        std::cout << "Crow: STOP;\n";
+        std::cout << "API: STOP;\n";
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;
     }
 
+    proc_queue_pessoas.request_stop();
+    proc_queue_pessoas.join();
+
     pq_conn_pool::instance()->release_pool();
+    std::cout << "API: DONE;\n";
 }

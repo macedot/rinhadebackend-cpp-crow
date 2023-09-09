@@ -4,6 +4,7 @@
   "dependencies": [
     "fmt",
     "asio",
+    "stduuid",
     "libpqxx"
   ]
 }

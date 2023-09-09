@@ -1,19 +1,15 @@
-CREATE OR REPLACE FUNCTION generate_searchable(_nome VARCHAR, _apelido VARCHAR, _stack VARCHAR)
-RETURNS TEXT AS $$
-    BEGIN
-        RETURN _nome || _apelido || _stack;
-    END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
 CREATE TABLE IF NOT EXISTS public.pessoas (
-    id          UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
-    apelido     TEXT UNIQUE NOT NULL,
-    nome        TEXT NOT NULL,
-    nascimento  DATE NOT NULL,
-    stack       TEXT,
-    searchable  TEXT GENERATED ALWAYS AS (generate_searchable(nome, apelido, COALESCE(stack, ''))) STORED
+    id VARCHAR(36),
+    apelido VARCHAR(32) CONSTRAINT ID_PK PRIMARY KEY,
+    nome VARCHAR(100),
+    nascimento CHAR(10),
+    stack VARCHAR(1024),
+    searchable TEXT GENERATED ALWAYS AS (
+        LOWER(NOME || APELIDO || STACK)
+    ) STORED
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS pessoas_apelido_index
+CREATE EXTENSION PG_TRGM;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS IDX_PESSOAS_BUSCA_TGRM
     ON public.pessoas
-    USING btree (apelido);
+    USING GIST (searchable GIST_TRGM_OPS(SIGLEN=64));

@@ -22,7 +22,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.05'
+          cpus: '0.15'
           memory: '0.20GB'
 
   api2:
@@ -52,7 +52,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.30'
+          cpus: '0.20'
           memory: '0.40GB'
 
   database: # Banco de dados
@@ -60,13 +60,13 @@ services:
     hostname: database
     environment:
       POSTGRES_PASSWORD: password
-      POSTGRES_MAX_CONNECTIONS: 1000
     ports:
       - "5432:5432"
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./create.sql:/docker-entrypoint-initdb.d/create.sql
       - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
+    command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.conf
     tmpfs:
       - /run
     healthcheck:
@@ -83,7 +83,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.10'
+          cpus: '1.00'
           memory: '2.0GB'
 
 volumes:
