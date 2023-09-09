@@ -18,34 +18,12 @@ target_include_directories(${PROJECT_NAME}-lib
     PUBLIC include
 )
 
-find_path(LIBPQXX_INCLUDE_DIR pqxx)
-FetchContent_Declare(
-  libpqxx
-  GIT_REPOSITORY https://github.com/jtv/libpqxx.git
-  GIT_TAG        7.8.1
-  GIT_PROGRESS   TRUE
-  USES_TERMINAL_DOWNLOAD TRUE
+find_package(fmt     CONFIG REQUIRED)
+find_package(libpqxx CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME}-lib 
+    PUBLIC fmt::fmt
+    PUBLIC libpqxx
 )
-set(SKIP_PQXX_SHARED ON)
-set(SKIP_BUILD_TEST ON)
-set(PQXX_LIBRARIES pqxx_static)
-FetchContent_MakeAvailable(libpqxx)
-FetchContent_GetProperties(libpqxx)
-set(HAVE_LIBPQXX7 TRUE)
-target_include_directories(${PROJECT_NAME}-lib  PRIVATE ${libpqxx_SOURCE_DIR}/include)
-
-#set(FMT_TEST FF CACHE INTERNAL "disabling fmt tests")
-FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY  https://github.com/fmtlib/fmt.git
-        GIT_TAG         10.1.1
-        GIT_PROGRESS    TRUE
-        USES_TERMINAL_DOWNLOAD TRUE
-)
-FetchContent_MakeAvailable(fmt)
-
-find_package(Crow CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME}-lib fmt::fmt-header-only Crow::Crow pqxx)
 
 add_executable(${PROJECT_NAME}-exe
         src/App.cpp

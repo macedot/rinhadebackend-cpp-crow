@@ -1,0 +1,8 @@
+{
+  "name": "api-cpp-crow",
+  "version-string": "master",
+  "dependencies": [
+    "fmt",
+    "libpqxx"
+  ]
+}
