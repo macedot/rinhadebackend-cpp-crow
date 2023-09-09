@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <crow.h>
+
 #include <fmt/format.h>
 
 #include "pq_conn_pool.h"
@@ -183,7 +184,9 @@ int main(void)
         return crow::response(response, result); // Created
     });
 
-    CROW_ROUTE(app, "/pessoas").methods("POST"_method)([](const crow::request& req) {
+    CROW_ROUTE(app, "/pessoas")
+        .methods("POST"_method, "GET"_method)
+    ([](const crow::request& req) {
         if (req.method == "POST"_method) {
             auto msg = crow::json::load(req.body);
             if (!msg) {
@@ -237,6 +240,13 @@ int main(void)
             auto res = crow::response(response); // Created
             res.set_header("Location", "http://localhost:9999/pessoas/" + pessoa.id);
             return res;
+        }
+
+        if (req.method == "GET"_method) {
+            auto query = req.url_params.get("t");
+            if(!query) {
+                return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+            }
         }
 
         return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
