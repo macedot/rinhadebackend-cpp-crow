@@ -3,25 +3,25 @@ FROM ubuntu:latest as build
 
 # Tools do to business
 RUN apt update && apt upgrade -y && apt install -y \
-    zip unzip tar autoconf pkg-config g++ \
+    curl zip unzip tar autoconf pkg-config g++ \
     make ninja-build gcc cmake git
 
 # Base bath
 ADD . /service
 WORKDIR /service
 
+# vcpkg for all other dependencies
+RUN git clone https://github.com/microsoft/vcpkg.git && \
+    ./vcpkg/bootstrap-vcpkg.sh && \
+    ./vcpkg/vcpkg install
+
 # CrowCpp from git (latest release still have boost dependency)
 RUN git clone https://github.com/CrowCpp/Crow.git && \
     cd Crow && \
     mkdir build && \
     cd build && \
-    cmake .. -DCROW_BUILD_EXAMPLES=OFF -DCROW_BUILD_TESTS=OFF && \
+    cmake .. -DCROW_BUILD_EXAMPLES=OFF -DCROW_BUILD_TESTS=OFF -DCMAKE_TOOLCHAIN_FILE=/service/vcpkg/scripts/buildsystems/vcpkg.cmake && \
     make install
-
-# vcpkg for all other dependencies
-RUN git clone https://github.com/microsoft/vcpkg.git && \
-    ./vcpkg/bootstrap-vcpkg.sh &&
-    ./vcpkg install
 
 # build the app
 WORKDIR /service/build

@@ -3,6 +3,7 @@
   "version-string": "master",
   "dependencies": [
     "fmt",
+    "asio",
     "libpqxx"
   ]
 }

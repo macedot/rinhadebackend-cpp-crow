@@ -20,9 +20,9 @@ target_include_directories(${PROJECT_NAME}-lib
 
 find_package(fmt     CONFIG REQUIRED)
 find_package(libpqxx CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME}-lib 
+target_link_libraries(${PROJECT_NAME}-lib
     PUBLIC fmt::fmt
-    PUBLIC libpqxx
+    PUBLIC libpqxx::pqxx
 )
 
 add_executable(${PROJECT_NAME}-exe
