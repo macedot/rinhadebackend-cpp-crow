@@ -6,7 +6,7 @@ RETURNS TEXT AS $$
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE TABLE IF NOT EXISTS public.pessoas (
-    id          TEXT UNIQUE NOT NULL,
+    id          UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
     apelido     TEXT UNIQUE NOT NULL,
     nome        TEXT NOT NULL,
     nascimento  DATE NOT NULL,
