@@ -1,9 +1,0 @@
-{
-  "name": "rinhadebackend-cpp-crow",
-  "version-string": "master",
-  "dependencies": [
-    "fmt",
-    "crow",
-    "libpqxx"
-  ]
-}
