@@ -1,3 +1,5 @@
+// https://github.com/CarolCheng/lobby/
+
 #include "pq_conn_pool.h"
 
 pq_conn_pool* pq_conn_pool::instance_ = nullptr;
@@ -33,27 +35,27 @@ void pq_conn_pool::init_conn(size_t size)
 pqconnptr pq_conn_pool::burrow()
 {
     std::lock_guard<std::mutex> locker(lock_);
-    if (!dbpool_.empty()) {
-        pqconnptr dbconn = dbpool_.front();
-        dbpool_.pop_front();
-        if (!dbconn->is_open()) {
-            dbconn.reset(new pqxx::connection(conn_string_.c_str()));
-        }
-        --cursize_;
-        return dbconn;
+    if (dbpool_.empty()) {
+        return nullptr;
     }
-    return nullptr;
+    pqconnptr dbconn = dbpool_.front();
+    dbpool_.pop_front();
+    if (!dbconn->is_open()) {
+        dbconn.reset(new pqxx::connection(conn_string_.c_str()));
+    }
+    --cursize_;
+    return dbconn;
 }
 
 bool pq_conn_pool::unburrow(pqconnptr dbconn)
 {
     std::lock_guard<std::mutex> locker(lock_);
-    if (dbconn) {
-        dbpool_.push_back(dbconn);
-        ++cursize_;
-        return true;
+    if (!dbconn) {
+        return false;
     }
-    return false;
+    dbpool_.push_back(dbconn);
+    ++cursize_;
+    return true;
 }
 
 void pq_conn_pool::release_pool()

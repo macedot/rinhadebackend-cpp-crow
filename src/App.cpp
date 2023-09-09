@@ -10,7 +10,7 @@
 #include "app_config.h"
 #include "uuid.h"
 
-constexpr auto API_MAX_THREADS = 25;
+constexpr auto API_MAX_THREADS = 20;
 
 struct Pessoa {
     std::string                id{};
@@ -97,7 +97,7 @@ auto add_pessoa(Pessoa& pessoa) -> int
         }
     }
     catch (const std::exception& ex) {
-        //std::cerr << "Insert failed: " << ex.what() << std::endl;
+        CROW_LOG_ERROR << __func__ << ": " << ex.what();
         pessoa.id.clear();
     }
     instance->unburrow(dbconn);
@@ -130,17 +130,15 @@ auto get_pessoa(const std::string& id, Pessoa& pessoa) -> int
       id);
     int nrow = -1;
     try {
-        // Execute SQL query on PostgreSQL
         pqxx::nontransaction work(*dbconn);
         pqxx::result         res(work.exec(selectsql));
-        // Getting the id of a newly inserted row (user data)
         for (const auto& c : res) {
             pessoa = map_result_pessoa(c);
         }
         nrow = res.size();
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << "get_pessoa: " << ex.what();
+        CROW_LOG_ERROR << __func__ << ": " << ex.what();
         nrow = -1;
     }
     instance->unburrow(dbconn);
@@ -159,17 +157,15 @@ auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
       query);
     int nrow = -1;
     try {
-        // Execute SQL query on PostgreSQL
         pqxx::nontransaction work(*dbconn);
         pqxx::result         res(work.exec(selectsql));
-        // Getting the id of a newly inserted row (user data)
         for (const auto& c : res) {
             pessoas.push_back(map_result_pessoa(c));
         }
         nrow = res.size();
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << "get_pessoas: " << ex.what();
+        CROW_LOG_ERROR << __func__ << ": " << ex.what();
         nrow = -1;
     }
     instance->unburrow(dbconn);
@@ -188,7 +184,7 @@ auto contagem_pessoas(int64_t& total) -> int64_t
         }
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << "contagem_pessoas: " << ex.what();
+        CROW_LOG_ERROR << __func__ << ": " << ex.what();
         total = -99;
     }
     instance->unburrow(dbconn);
@@ -228,7 +224,7 @@ int main(void)
         }
         crow::json::wvalue result;
         result["total"] = total;
-        return crow::response(response, result); // Created
+        return crow::response(response, result);
     });
 
     CROW_ROUTE(app, "/pessoas").methods("POST"_method, "GET"_method)([](const crow::request& req) {
@@ -273,11 +269,7 @@ int main(void)
             }
 
             Pessoa pessoa = {
-                get_uuid(),
-                msg["apelido"].s(),
-                msg["nome"].s(),
-                msg["nascimento"].s(),
-                stack
+                get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
             };
 
             const int response = add_pessoa(pessoa);
@@ -353,7 +345,6 @@ int main(void)
 
     try {
         CROW_LOG_INFO << "Crow: START";
-        //app.port(9999).multithreaded().run();
         app.port(3000).concurrency(API_MAX_THREADS).run();
         CROW_LOG_INFO << "Crow: STOP";
     }
