@@ -9,7 +9,8 @@
 #include "pq_conn_pool.h"
 #include "app_config.h"
 
-constexpr auto API_MAX_THREADS = 50;
+constexpr auto API_PORT        = 3000;
+constexpr auto API_MAX_THREADS = 25;
 
 struct Pessoa {
     std::string                id{};
@@ -163,7 +164,7 @@ auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
         nrow = -1;
     }
     instance->unburrow(dbconn);
-    return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
+    return (nrow >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
 auto contagem_pessoas(int64_t& total) -> int64_t
@@ -228,27 +229,27 @@ int main(void)
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
-            auto valida_param_str = [msg](const char* param) -> uint32_t {
-                if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
-                    return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
-                }
-                if (msg[param].t() != crow::json::type::String) {
-                    return HTTP::to_uint(HTTPStatus::BadRequest);
-                }
-                return 0;
-            };
+            // auto valida_param_str = [msg](const char* param) -> uint32_t {
+            //     if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
+            //         return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
+            //     }
+            //     if (msg[param].t() != crow::json::type::String) {
+            //         return HTTP::to_uint(HTTPStatus::BadRequest);
+            //     }
+            //     return 0;
+            // };
 
-            if (auto res = valida_param_str("apelido"); res > 0) {
-                return crow::response(res);
-            }
+            // if (auto res = valida_param_str("apelido"); res > 0) {
+            //     return crow::response(res);
+            // }
 
-            if (auto res = valida_param_str("nome"); res > 0) {
-                return crow::response(res);
-            }
+            // if (auto res = valida_param_str("nome"); res > 0) {
+            //     return crow::response(res);
+            // }
 
-            if (auto res = valida_param_str("nascimento"); res > 0) {
-                return crow::response(res);
-            }
+            // if (auto res = valida_param_str("nascimento"); res > 0) {
+            //     return crow::response(res);
+            // }
 
             std::optional<std::string> stack;
             if (msg.has("stack")) {
@@ -337,9 +338,9 @@ int main(void)
     app.loglevel(crow::LogLevel::Critical);
 
     try {
-        std::cout << "Crow: START\n";
-        app.port(3000).concurrency(API_MAX_THREADS).run();
-        std::cout << "Crow: STOP\n";
+        std::cout << fmt::format("Crow: START; port={}; threads={};\n", API_PORT, API_MAX_THREADS);
+        app.port(API_PORT).concurrency(API_MAX_THREADS).run();
+        std::cout << "Crow: STOP;\n";
     }
     catch (const std::exception& e) {
         std::cerr << "std::exception:" << e.what() << std::endl;

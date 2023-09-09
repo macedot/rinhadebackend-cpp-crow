@@ -60,6 +60,7 @@ services:
     hostname: database
     environment:
       POSTGRES_PASSWORD: password
+      POSTGRES_MAX_CONNECTIONS: 1000
     ports:
       - "5432:5432"
     volumes:
