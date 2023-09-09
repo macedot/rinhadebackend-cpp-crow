@@ -5,6 +5,7 @@
     "fmt",
     "asio",
     "stduuid",
+    "libuuid",
     "libpqxx"
   ]
 }
