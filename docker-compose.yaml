@@ -22,8 +22,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
-          memory: '0.40GB'
+          cpus: '0.25'
+          memory: '0.20GB'
 
   api2:
     <<: *api
@@ -52,8 +52,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.20'
-          memory: '0.20GB'
+          cpus: '0.30'
+          memory: '0.40GB'
 
   database: # Banco de dados
     image: docker.io/postgres:alpine
@@ -66,7 +66,7 @@ services:
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./create.sql:/docker-entrypoint-initdb.d/create.sql
-      - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
+      # - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
     tmpfs:
       - /run
     healthcheck:
@@ -83,7 +83,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
+          cpus: '1.2'
           memory: '2.0GB'
 
 volumes:

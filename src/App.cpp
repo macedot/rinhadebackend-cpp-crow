@@ -10,7 +10,7 @@
 #include "app_config.h"
 #include "uuid.h"
 
-constexpr auto API_MAX_THREADS = 10;
+constexpr auto API_MAX_THREADS = 25;
 
 struct Pessoa {
     std::string                id{};
@@ -19,38 +19,73 @@ struct Pessoa {
     std::string                nascimento{};
     std::optional<std::string> stack = std::nullopt;
 
-    std::string fields() const
+    std::string insert_fields() const
     {
         std::string res = std::string{ "id,apelido,nome,nascimento" };
-        if (stack)
+        if (stack) {
             res += ",stack";
+        }
         return res;
     }
 
-    std::string values() const
+    std::string insert_values() const
     {
         std::string res = fmt::format("'{}','{}','{}','{}'", id, apelido, nome, nascimento);
-        if (stack)
+        if (stack) {
             res += fmt::format(",'{}'", stack.value());
+        }
         return res;
     }
 };
 
 std::string get_uuid()
 {
-    std::string res = uuid::v4::UUID::New().String();
-    return res;
+    return uuid::v4::UUID::New().String();
 }
 
-int add_pessoa(Pessoa& pessoa)
+auto join(const crow::json::rvalue& elems, std::optional<std::string>& stack) -> bool
+{
+    std::string res;
+    if (elems.size() > 0) {
+        if (elems[0].t() != crow::json::type::String) {
+            return false;
+        }
+        res += elems[0].s();
+        if (elems.size() > 1) {
+            for (size_t i = 1; i < elems.size(); ++i) {
+                if (elems[i].t() != crow::json::type::String) {
+                    return false;
+                }
+                res += ",";
+                res += elems[i].s();
+            }
+        }
+    }
+    stack = res;
+    return true;
+};
+
+auto split(const std::string& src) -> std::vector<std::string>
+{
+    std::vector<std::string> stack;
+    std::stringstream        s_stream(src);
+    std::string              substr;
+    while (s_stream.good()) {
+        getline(s_stream, substr, ',');
+        stack.push_back(substr);
+    }
+    return stack;
+}
+
+auto add_pessoa(Pessoa& pessoa) -> int
 {
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
     const std::string insertsql = fmt::format(
       "INSERT INTO pessoas ({}) "
       "VALUES ({}) RETURNING id;",
-      pessoa.fields(),
-      pessoa.values());
+      pessoa.insert_fields(),
+      pessoa.insert_values());
     try {
         // Execute SQL query on PostgreSQL
         pqxx::work   work(*dbconn);
@@ -58,7 +93,6 @@ int add_pessoa(Pessoa& pessoa)
         work.commit();
         // Getting the id of a newly inserted row (user data)
         for (const auto c : res) {
-            pessoa.id.clear();
             pessoa.id = c[0].as<std::string>();
         }
     }
@@ -71,7 +105,20 @@ int add_pessoa(Pessoa& pessoa)
                                 : HTTP::to_uint(HTTPStatus::BadRequest);
 }
 
-int get_pessoa(const std::string& id, Pessoa& pessoa)
+auto map_result_pessoa(const pqxx::result::const_iterator& c) -> Pessoa
+{
+    Pessoa pessoa;
+    pessoa.id         = c[0].as<std::string>();
+    pessoa.apelido    = c[1].as<std::string>();
+    pessoa.nome       = c[2].as<std::string>();
+    pessoa.nascimento = c[3].as<std::string>();
+    if (!c[4].is_null()) {
+        pessoa.stack = c[4].as<std::string>();
+    }
+    return pessoa;
+}
+
+auto get_pessoa(const std::string& id, Pessoa& pessoa) -> int
 {
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
@@ -87,28 +134,49 @@ int get_pessoa(const std::string& id, Pessoa& pessoa)
         pqxx::nontransaction work(*dbconn);
         pqxx::result         res(work.exec(selectsql));
         // Getting the id of a newly inserted row (user data)
-        for (const auto c : res) {
-            pessoa.id      = c[0].as<std::string>();
-            pessoa.apelido = c[1].as<std::string>();
-            pessoa.nome    = c[2].as<std::string>();
-            if (!c[3].is_null()) {
-                pessoa.nascimento = c[3].as<std::string>();
-            }
-            if (!c[4].is_null()) {
-                pessoa.stack = c[4].as<std::string>();
-            }
+        for (const auto& c : res) {
+            pessoa = map_result_pessoa(c);
         }
         nrow = res.size();
     }
     catch (const std::exception& ex) {
+        CROW_LOG_ERROR << "get_pessoa: " << ex.what();
         nrow = -1;
-        //std::cerr << "Select failed: " << ex.what() << std::endl;
     }
     instance->unburrow(dbconn);
     return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
-int64_t contagem_pessoas(int64_t& total)
+auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
+{
+    auto              instance  = pq_conn_pool::instance();
+    auto              dbconn    = instance->burrow();
+    const std::string selectsql = fmt::format(
+      "SELECT id,apelido,nome,nascimento,stack"
+      " FROM pessoas"
+      " WHERE searchable ILIKE '%{}%'"
+      " LIMIT 50",
+      query);
+    int nrow = -1;
+    try {
+        // Execute SQL query on PostgreSQL
+        pqxx::nontransaction work(*dbconn);
+        pqxx::result         res(work.exec(selectsql));
+        // Getting the id of a newly inserted row (user data)
+        for (const auto& c : res) {
+            pessoas.push_back(map_result_pessoa(c));
+        }
+        nrow = res.size();
+    }
+    catch (const std::exception& ex) {
+        CROW_LOG_ERROR << "get_pessoas: " << ex.what();
+        nrow = -1;
+    }
+    instance->unburrow(dbconn);
+    return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
+}
+
+auto contagem_pessoas(int64_t& total) -> int64_t
 {
     auto instance = pq_conn_pool::instance();
     auto dbconn   = instance->burrow();
@@ -118,38 +186,17 @@ int64_t contagem_pessoas(int64_t& total)
         for (const auto c : res) {
             total = c[0].as<int64_t>();
         }
-        //std::cerr << "Found: " << total << std::endl;
     }
     catch (const std::exception& ex) {
-        //std::cerr << "Select failed: " << ex.what() << std::endl;
+        CROW_LOG_ERROR << "contagem_pessoas: " << ex.what();
         total = -99;
     }
     instance->unburrow(dbconn);
     return (total >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
-auto join(const crow::json::rvalue& elems, std::optional<std::string>& stack) -> bool
-{
-    std::string res;
-    if (elems.size() > 0) {
-        if (elems[0].t() != crow::json::type::String)
-            return false;
-        res += elems[0].s();
-        if (elems.size() > 1) {
-            for (size_t i = 1; i < elems.size(); ++i) {
-                if (elems[i].t() != crow::json::type::String)
-                    return false;
-                res += ",";
-                res += elems[i].s();
-            }
-        }
-    }
-    stack = res;
-    return true;
-};
-
 // https://stackoverflow.com/questions/524591/performance-of-creating-a-c-stdstring-from-an-input-iterator/524843#524843
-std::string readFile2(const std::string& fileName)
+auto readFile2(const std::string& fileName) -> std::string
 {
     std::ifstream ifs(fileName.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
     const std::ifstream::pos_type fileSize = ifs.tellg();
@@ -184,9 +231,7 @@ int main(void)
         return crow::response(response, result); // Created
     });
 
-    CROW_ROUTE(app, "/pessoas")
-        .methods("POST"_method, "GET"_method)
-    ([](const crow::request& req) {
+    CROW_ROUTE(app, "/pessoas").methods("POST"_method, "GET"_method)([](const crow::request& req) {
         if (req.method == "POST"_method) {
             auto msg = crow::json::load(req.body);
             if (!msg) {
@@ -228,7 +273,11 @@ int main(void)
             }
 
             Pessoa pessoa = {
-                get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
+                get_uuid(),
+                msg["apelido"].s(),
+                msg["nome"].s(),
+                msg["nascimento"].s(),
+                stack
             };
 
             const int response = add_pessoa(pessoa);
@@ -243,10 +292,32 @@ int main(void)
         }
 
         if (req.method == "GET"_method) {
-            auto query = req.url_params.get("t");
-            if(!query) {
+            auto t = req.url_params.get("t");
+            if (!t) {
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
+
+            std::list<Pessoa> pessoas;
+            const auto        query    = crow::utility::lexical_cast<std::string>(t);
+            const auto        response = get_pessoas(pessoas, query);
+            if (response != 200) {
+                return crow::response(response);
+            }
+
+            crow::json::wvalue result;
+            unsigned int       index = 0;
+            for (const auto& pessoa : pessoas) {
+                result[index]["id"]         = pessoa.id;
+                result[index]["apelido"]    = pessoa.apelido;
+                result[index]["nome"]       = pessoa.nome;
+                result[index]["nascimento"] = pessoa.nascimento;
+                if (pessoa.stack) {
+                    result[index]["stack"] = split(pessoa.stack.value());
+                }
+                ++index;
+            }
+
+            return crow::response(response, result);
         }
 
         return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
@@ -273,14 +344,7 @@ int main(void)
           result["nome"]       = pessoa.nome;
           result["nascimento"] = pessoa.nascimento;
           if (pessoa.stack) {
-              std::vector<std::string> stack;
-              std::stringstream        s_stream(pessoa.stack.value());
-              std::string              substr;
-              while (s_stream.good()) {
-                  getline(s_stream, substr, ',');
-                  stack.push_back(substr);
-              }
-              result["stack"] = stack;
+              result["stack"] = split(pessoa.stack.value());
           }
           return crow::response(response, result);
       });
