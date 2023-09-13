@@ -26,7 +26,10 @@ struct Pessoa {
 ts_unordered_set<std::string> cache_apelido;
 ts_queue<Pessoa>              queue_pessoas;
 
-std::string get_uuid() { return uuids::to_string(uuids::uuid_system_generator{}()); }
+std::string get_uuid()
+{
+    return uuids::to_string(uuids::uuid_system_generator{}());
+}
 
 auto join(const crow::json::rvalue& elems, std::string& stack) -> bool
 {
@@ -65,9 +68,13 @@ auto add_pessoa(Pessoa& pessoa) -> int
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
     const std::string insertsql = fmt::format(
-        "INSERT INTO pessoas (id,apelido,nome,nascimento,stack) "
-        "VALUES ('{}','{}','{}','{}','{}');",
-        pessoa.id, pessoa.apelido, pessoa.nome, pessoa.nascimento, pessoa.stack);
+      "INSERT INTO pessoas (id,apelido,nome,nascimento,stack) "
+      "VALUES ('{}','{}','{}','{}','{}');",
+      pessoa.id,
+      pessoa.apelido,
+      pessoa.nome,
+      pessoa.nascimento,
+      pessoa.stack);
 
     try {
         // Execute SQL query on PostgreSQL
@@ -101,11 +108,11 @@ auto get_pessoa(const std::string& id, Pessoa& pessoa) -> int
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
     const std::string selectsql = fmt::format(
-        "SELECT id,apelido,nome,nascimento,stack"
-        " FROM pessoas"
-        " WHERE id='{}'"
-        " LIMIT 1",
-        id);
+      "SELECT id,apelido,nome,nascimento,stack"
+      " FROM pessoas"
+      " WHERE id='{}'"
+      " LIMIT 1",
+      id);
     int nrow = -1;
     try {
         pqxx::nontransaction work(*dbconn);
@@ -125,33 +132,43 @@ auto get_pessoa(const std::string& id, Pessoa& pessoa) -> int
 
 std::string str_tolower(std::string s)
 {
-    std::transform(s.begin(), s.end(), s.begin(),
+    std::transform(s.begin(),
+                   s.end(),
+                   s.begin(),
                    // static_cast<int(*)(int)>(std::tolower)         // wrong
                    // [](int c){ return std::tolower(c); }           // wrong
                    // [](char c){ return std::tolower(c); }          // wrong
-                   [](unsigned char c) { return std::tolower(c); }  // correct
+                   [](unsigned char c) { return std::tolower(c); } // correct
     );
     return s;
 }
 
-auto get_pessoas(std::list<Pessoa>& pessoas, const std::string& query) -> int
+auto get_pessoas(crow::json::wvalue& pessoas, const std::string& query) -> int
 {
     auto              instance  = pq_conn_pool::instance();
     auto              dbconn    = instance->burrow();
     const std::string selectsql = fmt::format(
-        "SELECT id,apelido,nome,nascimento,stack"
-        " FROM pessoas"
-        " WHERE searchable LIKE '%{}%'"
-        " LIMIT 50",
-        str_tolower(query));
+      "SELECT id,apelido,nome,nascimento,stack"
+      " FROM pessoas"
+      " WHERE searchable LIKE '%{}%'"
+      " LIMIT 50",
+      str_tolower(query));
     int nrow = -1;
     try {
         pqxx::nontransaction work(*dbconn);
         pqxx::result         res(work.exec(selectsql));
+        std::string          stack;
         for (const auto& c : res) {
-            pessoas.push_back(map_result_pessoa(c));
+            ++nrow;
+            pessoas[nrow]["id"]         = c[0].as<std::string>();
+            pessoas[nrow]["apelido"]    = c[1].as<std::string>();
+            pessoas[nrow]["nome"]       = c[2].as<std::string>();
+            pessoas[nrow]["nascimento"] = c[3].as<std::string>();
+            stack                       = c[4].as<std::string>();
+            if (!stack.empty()) {
+                pessoas[nrow]["stack"] = split(stack);
+            }
         }
-        nrow = res.size();
     }
     catch (const std::exception& ex) {
         CROW_LOG_ERROR << __func__ << ": " << ex.what();
@@ -180,18 +197,7 @@ auto contagem_pessoas(int64_t& total) -> int64_t
     return (total >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
-// https://stackoverflow.com/questions/524591/performance-of-creating-a-c-stdstring-from-an-input-iterator/524843#524843
-auto readFile2(const std::string& fileName) -> std::string
-{
-    std::ifstream ifs(fileName.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
-    const std::ifstream::pos_type fileSize = ifs.tellg();
-    ifs.seekg(0, std::ios::beg);
-    std::vector<char> bytes(fileSize);
-    ifs.read(bytes.data(), fileSize);
-    return std::string(bytes.data(), fileSize);
-}
-
-template <typename _Ty>
+template<typename _Ty>
 auto GetEnv(const std::string& variable_name, const _Ty& default_value)
 {
     const char* value = std::getenv(variable_name.c_str());
@@ -200,7 +206,7 @@ auto GetEnv(const std::string& variable_name, const _Ty& default_value)
     }
 
     if constexpr (std::is_same_v<_Ty, std::string> || std::is_same_v<_Ty, const char*>) {
-        return std::string{value};
+        return std::string{ value };
     }
 
     if constexpr (std::is_unsigned_v<_Ty>) {
@@ -214,9 +220,9 @@ int main(void)
 {
     const auto SERVER_PORT = GetEnv("SERVER_PORT", 3000);
     const auto SERVER_CONCURRENCY =
-        GetEnv("SERVER_CONCURRENCY", std::thread::hardware_concurrency());
+      GetEnv("SERVER_CONCURRENCY", std::thread::hardware_concurrency());
     const auto DATABASE_URL =
-        GetEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres");
+      GetEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres");
 
     auto instance = pq_conn_pool::init(DATABASE_URL, SERVER_CONCURRENCY);
     if (!instance) {
@@ -282,8 +288,9 @@ int main(void)
                 }
             }
 
-            Pessoa pessoa = {get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(),
-                             stack};
+            Pessoa pessoa = {
+                get_uuid(), msg["apelido"].s(), msg["nome"].s(), msg["nascimento"].s(), stack
+            };
 
             if (cache_apelido.exists(pessoa.apelido)) {
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
@@ -303,23 +310,10 @@ int main(void)
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
-            std::list<Pessoa> pessoas;
-            const auto        response = get_pessoas(pessoas, query);
+            crow::json::wvalue result;
+            const auto         response = get_pessoas(result, query);
             if (response != 200) {
                 return crow::response(response);
-            }
-
-            crow::json::wvalue result;
-            unsigned int       index = 0;
-            for (const auto& pessoa : pessoas) {
-                result[index]["id"]         = pessoa.id;
-                result[index]["apelido"]    = pessoa.apelido;
-                result[index]["nome"]       = pessoa.nome;
-                result[index]["nascimento"] = pessoa.nascimento;
-                if (!pessoa.stack.empty()) {
-                    result[index]["stack"] = split(pessoa.stack);
-                }
-                ++index;
             }
 
             return crow::response(response, result);
@@ -329,30 +323,30 @@ int main(void)
     });
 
     CROW_ROUTE(app, "/pessoas/<string>")
-        .methods("GET"_method)([=](const crow::request& req, const std::string& id) {
-            if (req.method != "GET"_method) {
-                return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
-            }
-            if (id.empty()) {
-                return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
-            }
+      .methods("GET"_method)([=](const crow::request& req, const std::string& id) {
+          if (req.method != "GET"_method) {
+              return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+          }
+          if (id.empty()) {
+              return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+          }
 
-            Pessoa pessoa;
-            int    response = get_pessoa(id, pessoa);
-            if (response != 200) {
-                return crow::response(response);
-            }
+          Pessoa pessoa;
+          int    response = get_pessoa(id, pessoa);
+          if (response != 200) {
+              return crow::response(response);
+          }
 
-            crow::json::wvalue result;
-            result["id"]         = pessoa.id;
-            result["apelido"]    = pessoa.apelido;
-            result["nome"]       = pessoa.nome;
-            result["nascimento"] = pessoa.nascimento;
-            if (!pessoa.stack.empty()) {
-                result["stack"] = split(pessoa.stack);
-            }
-            return crow::response(response, result);
-        });
+          crow::json::wvalue result;
+          result["id"]         = pessoa.id;
+          result["apelido"]    = pessoa.apelido;
+          result["nome"]       = pessoa.nome;
+          result["nascimento"] = pessoa.nascimento;
+          if (!pessoa.stack.empty()) {
+              result["stack"] = split(pessoa.stack);
+          }
+          return crow::response(response, result);
+      });
 
     app.loglevel(crow::LogLevel::Critical);
 
@@ -367,8 +361,8 @@ int main(void)
     });
 
     try {
-        std::cout << fmt::format("API: START; SERVER_PORT={}; SERVER_CONCURRENCY={};\n",
-                                 SERVER_PORT, SERVER_CONCURRENCY);
+        std::cout << fmt::format(
+          "API: START; SERVER_PORT={}; SERVER_CONCURRENCY={};\n", SERVER_PORT, SERVER_CONCURRENCY);
         app.port(SERVER_PORT).concurrency(SERVER_CONCURRENCY).run();
         std::cout << "API: STOP;\n";
     }
