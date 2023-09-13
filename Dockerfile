@@ -11,8 +11,9 @@ ADD . /service
 WORKDIR /service
 
 # vcpkg for all other dependencies
-RUN git clone https://github.com/microsoft/vcpkg.git && \
-    ./vcpkg/bootstrap-vcpkg.sh
+ENV VCPKG_FORCE_SYSTEM_BINARIES=1
+RUN git clone https://github.com/microsoft/vcpkg.git
+RUN ./vcpkg/bootstrap-vcpkg.sh
 RUN ./vcpkg/vcpkg install
 
 # CrowCpp from git (latest release still have boost dependency)

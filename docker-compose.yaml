@@ -1,16 +1,13 @@
-version: '3.5'
+version: '3.7'
 
 services:
   api1: &api
     #image: docker.io/akitaonrails/rinhabackend-crystal:latest
     build: .
     hostname: api1
-    volumes:
-      - ./db.string:/service/db.string
-    expose:
-      - "3000"
-    links:
-      - database
+    environment:
+      - SERVER_PORT=3001
+    network_mode: "host"
     depends_on:
       database:
         condition: service_healthy
@@ -28,19 +25,19 @@ services:
   api2:
     <<: *api
     hostname: api2
+    environment:
+      - SERVER_PORT=3002
     depends_on:
       - api1
 
   nginx: # Load Balancer
-    image: docker.io/nginx:latest
+    image: docker.io/nginx:alpine
     command: ["nginx", "-g", "daemon off;"]
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "9999:9999"
-    links:
-      - api1
-      - api2
+    network_mode: "host"
     depends_on:
       - api1
       - api2
@@ -62,6 +59,7 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
+    network_mode: "host"
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./create.sql:/docker-entrypoint-initdb.d/create.sql
