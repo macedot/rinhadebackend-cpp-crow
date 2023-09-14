@@ -197,32 +197,25 @@ auto contagem_pessoas(int64_t& total) -> int64_t
     return (total >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
 }
 
-template<typename _Ty>
-auto GetEnv(const std::string& variable_name, const _Ty& default_value)
+std::string GetEnvStr(const std::string& variable_name, const std::string& default_value)
 {
-    const char* value = std::getenv(variable_name.c_str());
-    if (!value) {
-        return default_value;
-    }
+    const char* value = std::getenv(variable_name.data());
+    return value ? value : default_value;
+}
 
-    if constexpr (std::is_same_v<_Ty, std::string> || std::is_same_v<_Ty, const char*>) {
-        return std::string{ value };
-    }
-
-    if constexpr (std::is_unsigned_v<_Ty>) {
-        return std::stoul(value);
-    }
-
-    return std::stoi(value);
+int GetEnvUInt16(const std::string& variable_name, int default_value)
+{
+    const char* value = std::getenv(variable_name.data());
+    return (value ? std::stoi(value) : default_value);
 }
 
 int main(void)
 {
-    const auto SERVER_PORT = GetEnv("SERVER_PORT", 3000);
+    const auto SERVER_PORT = GetEnvUInt16("SERVER_PORT", 3000);
     const auto SERVER_CONCURRENCY =
-      GetEnv("SERVER_CONCURRENCY", std::thread::hardware_concurrency());
+      GetEnvUInt16("SERVER_CONCURRENCY", std::thread::hardware_concurrency());
     const auto DATABASE_URL =
-      GetEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres");
+      GetEnvStr("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres");
 
     auto instance = pq_conn_pool::init(DATABASE_URL, SERVER_CONCURRENCY);
     if (!instance) {
@@ -296,8 +289,13 @@ int main(void)
                 return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
             }
 
+            //queue_pessoas.push(pessoa);
+            const auto response = add_pessoa(pessoa);
+            if (response != 201) {
+                return crow::response(response);
+            }
+
             cache_apelido.emplace(pessoa.apelido);
-            queue_pessoas.push(pessoa);
 
             auto res = crow::response(HTTP::to_uint(HTTPStatus::Created));
             res.set_header("Location", "http://localhost:9999/pessoas/" + pessoa.id);
@@ -350,15 +348,15 @@ int main(void)
 
     app.loglevel(crow::LogLevel::Critical);
 
-    std::jthread proc_queue_pessoas([](std::stop_token stoken) {
-        while (!(stoken.stop_requested())) {
-            while (!queue_pessoas.empty()) {
-                auto pessoa = queue_pessoas.pop();
-                add_pessoa(pessoa);
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    });
+    // std::jthread proc_queue_pessoas([](std::stop_token stoken) {
+    //     while (!(stoken.stop_requested())) {
+    //         while (!queue_pessoas.empty()) {
+    //             auto pessoa = queue_pessoas.pop();
+    //             add_pessoa(pessoa);
+    //         }
+    //         std::this_thread::sleep_for(std::chrono::seconds(1));
+    //     }
+    // });
 
     try {
         std::cout << fmt::format(
@@ -370,8 +368,8 @@ int main(void)
         std::cerr << "std::exception:" << e.what() << std::endl;
     }
 
-    proc_queue_pessoas.request_stop();
-    proc_queue_pessoas.join();
+    // proc_queue_pessoas.request_stop();
+    // proc_queue_pessoas.join();
 
     pq_conn_pool::instance()->release_pool();
     std::cout << "API: DONE;\n";

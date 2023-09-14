@@ -7,6 +7,7 @@ services:
     hostname: api1
     environment:
       - SERVER_PORT=3001
+      - SERVER_CONCURRENCY=25
     network_mode: "host"
     depends_on:
       database:
@@ -27,6 +28,7 @@ services:
     hostname: api2
     environment:
       - SERVER_PORT=3002
+      - SERVER_CONCURRENCY=25
     depends_on:
       - api1
 
