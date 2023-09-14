@@ -19,6 +19,7 @@ setup:
 PHONY: setup
 
 run:
+	$ [ -f .env ] || exit 1
 	$ export $(cat .env | xargs) && ./build/api-cpp-crow-exe
 PHONY: run
 
@@ -31,14 +32,18 @@ PHONY: clean
 # 	$ docker build --no-cache -t macedot/rinhadebackend-cpp-crow --progress=plain -f ./Dockerfile .
 # PHONY: build-image
 
-# start-database:
-# 	$ docker compose -f docker-compose.dev.yml up -d postgres
-# PHONY: start-database
+start-database:
+	$ docker compose -f docker-compose.yaml up -d database
+PHONY: start-database
 
-# stop-all-compose-services:
-# 	$ docker compose -f docker-compose.dev.yml down
-# 	$ docker volume rm backend-cockfighintg-q3-2023_postgres_data
-# PHONY: stop-all-compose-services
+start:
+	$ docker compose -f docker-compose.yaml up -d
+PHONY: start
+
+stop:
+	$ docker compose -f docker-compose.yaml down
+	$ docker volume rm rinhadebackend-cpp-crow_dbdata
+PHONY: start-database
 
 # run-container:
 # 	$ docker run --rm --name rinhadebackend-cpp-crow --env-file=.env -p 9998:9998 macedot/rinhadebackend-cpp-crow
