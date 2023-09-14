@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef _APP_CONFIG_
-#define _APP_CONFIG_
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -43,5 +40,3 @@ class HTTP {
   public:
     static uint32_t to_uint(HTTPStatus status) { return static_cast<std::size_t>(status); }
 };
-
-#endif //_APP_CONFIG_

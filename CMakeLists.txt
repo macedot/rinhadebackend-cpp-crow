@@ -1,7 +1,5 @@
-include(FetchContent)
 cmake_minimum_required(VERSION 3.20)
-set(PROJECT_NAME api-cpp-crow)
-project(${PROJECT_NAME} VERSION 0.1.0 LANGUAGES CXX)
+project(api-cpp-crow VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,6 +13,7 @@ add_library(${PROJECT_NAME}-lib
 )
 
 target_include_directories(${PROJECT_NAME}-lib
+    PUBLIC Crow/include
     PUBLIC include
 )
 
@@ -31,7 +30,7 @@ target_link_libraries(${PROJECT_NAME}-lib
 )
 
 add_executable(${PROJECT_NAME}-exe
-        src/App.cpp
+        src/main.cpp
 )
 target_link_libraries(${PROJECT_NAME}-exe ${PROJECT_NAME}-lib)
 add_dependencies(${PROJECT_NAME}-exe ${PROJECT_NAME}-lib)

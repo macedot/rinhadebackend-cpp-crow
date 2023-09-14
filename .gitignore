@@ -34,7 +34,16 @@
 vcpkg_installed/
 build/
 out/
+Crow/
+vcpkg/
 .vscode/
 .vs/
 /vs/vcpkg_install
 /vs/x64
+
+CMakeUserPresets.json
+CMakePresets.json
+CMakeCache.txt
+
+CMakeFiles
+.cmake

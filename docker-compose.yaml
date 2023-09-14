@@ -7,7 +7,7 @@ services:
     hostname: api1
     environment:
       - SERVER_PORT=3001
-      - SERVER_CONCURRENCY=25
+      - SERVER_CONCURRENCY=50
     network_mode: "host"
     depends_on:
       database:
@@ -20,7 +20,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
+          cpus: '0.25'
           memory: '0.20GB'
 
   api2:
@@ -28,7 +28,7 @@ services:
     hostname: api2
     environment:
       - SERVER_PORT=3002
-      - SERVER_CONCURRENCY=25
+      - SERVER_CONCURRENCY=50
     depends_on:
       - api1
 
@@ -36,7 +36,7 @@ services:
     image: docker.io/nginx:alpine
     command: ["nginx", "-g", "daemon off;"]
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "9999:9999"
     network_mode: "host"
@@ -51,7 +51,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.20'
+          cpus: '0.15'
           memory: '0.40GB'
 
   database: # Banco de dados
@@ -64,8 +64,8 @@ services:
     network_mode: "host"
     volumes:
       - dbdata:/var/lib/postgresql/data
-      - ./create.sql:/docker-entrypoint-initdb.d/create.sql
-      - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
+      - ./docker/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/database/postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
     command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.conf
     tmpfs:
       - /run
@@ -83,7 +83,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.00'
+          cpus: '0.85'
           memory: '2.0GB'
 
 volumes:
