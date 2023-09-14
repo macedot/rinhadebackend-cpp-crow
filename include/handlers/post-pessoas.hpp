@@ -5,9 +5,6 @@
 
 #include <fmt/format.h>
 
-#define UUID_SYSTEM_GENERATOR
-#include "uuid.h"
-
 #include <crow.h>
 
 #include "pq_conn_pool.h"
@@ -33,14 +30,13 @@ auto addPessoaDB(const std::string& id,
       stack);
 
     try {
-        // Execute SQL query on PostgreSQL
         pqxx::work   work(*dbconn);
         pqxx::result res(work.exec(insertsql));
         work.commit();
         success = true;
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << __func__ << ": " << ex.what();
+        CROW_LOG_CRITICAL << __func__ << ": " << ex.what();
     }
 
     instance->unburrow(dbconn);
@@ -57,7 +53,8 @@ auto postPessoas(const crow::request& req) -> crow::response
 
     auto valida_param_str = [msg](const char* param) -> uint32_t {
         if (!msg.has(param) || msg[param].t() == crow::json::type::Null) {
-            return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
+            //return HTTP::to_uint(HTTPStatus::UnprocessableEntity);
+            return HTTP::to_uint(HTTPStatus::BadRequest);
         }
         if (msg[param].t() != crow::json::type::String) {
             return HTTP::to_uint(HTTPStatus::BadRequest);
@@ -77,6 +74,21 @@ auto postPessoas(const crow::request& req) -> crow::response
         return crow::response(res);
     }
 
+    const auto& apelido = msg["apelido"].s();
+    if (apelido.size() > 32) {
+        return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+    }
+
+    const auto& nome = msg["nome"].s();
+    if (nome.size() > 100) {
+        return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+    }
+
+    const auto& nascimento = msg["nascimento"].s();
+    if (nascimento.size() > 10) {
+        return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
+    }
+
     std::string stack{};
     if (msg.has("stack")) {
         if (msg["stack"].t() == crow::json::type::List) {
@@ -89,11 +101,8 @@ auto postPessoas(const crow::request& req) -> crow::response
         }
     }
 
-    const auto  id         = utils::get_uuid();
-    const auto& apelido    = msg["apelido"].s();
-    const auto& nome       = msg["nome"].s();
-    const auto& nascimento = msg["nascimento"].s();
-    const auto  response   = addPessoaDB(id, apelido, nome, nascimento, stack);
+    const auto id       = utils::get_uuid();
+    const auto response = addPessoaDB(id, apelido, nome, nascimento, stack);
     if (response != 201) {
         return crow::response(response);
     }

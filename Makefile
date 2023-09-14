@@ -1,4 +1,4 @@
-build-app:
+build:
 	$ ./scripts/build.sh
 PHONY: build-app
 
@@ -19,7 +19,6 @@ setup:
 PHONY: setup
 
 run:
-	$ [ -f .env ] || exit 1
 	$ export $(cat .env | xargs) && ./build/api-cpp-crow-exe
 PHONY: run
 
@@ -27,13 +26,23 @@ clean:
 	$ rm -fr ./build 2>/dev/null
 PHONY: clean
 
-# build-image:
-# 	# $ docker build -t macedot/rinhadebackend-cpp-crow --progress=plain .
-# 	$ docker build --no-cache -t macedot/rinhadebackend-cpp-crow --progress=plain -f ./Dockerfile .
-# PHONY: build-image
+clean-all:
+	$ rm -fr ./build 2>/dev/null
+	$ rm -fr ./Crow 2>/dev/null
+	$ rm -fr ./vcpkg 2>/dev/null
+	$ rm -fr ./vcpkg_installed 2>/dev/null
+PHONY: clean
+
+build-image:
+	$ docker build --no-cache -t macedot/rinhadebackend-cpp-crow --progress=plain -f ./Dockerfile .
+PHONY: build-image
 
 start-database:
 	$ docker compose -f docker-compose.yaml up -d database
+PHONY: start-database
+
+clean-database:
+	$ docker volume rm rinhadebackend-cpp-crow_dbdata
 PHONY: start-database
 
 start:
@@ -42,7 +51,6 @@ PHONY: start
 
 stop:
 	$ docker compose -f docker-compose.yaml down
-	$ docker volume rm rinhadebackend-cpp-crow_dbdata
 PHONY: start-database
 
 # run-container:

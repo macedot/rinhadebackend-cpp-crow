@@ -2,12 +2,13 @@ version: '3.7'
 
 services:
   api1: &api
-    #image: docker.io/akitaonrails/rinhabackend-crystal:latest
+    #image: docker.io/macedot/rinhadebackend-cpp-crow
     build: .
     hostname: api1
     environment:
       - SERVER_PORT=3001
-      - SERVER_CONCURRENCY=50
+      - SERVER_CONCURRENCY=25
+      - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
     network_mode: "host"
     depends_on:
       database:
@@ -28,7 +29,8 @@ services:
     hostname: api2
     environment:
       - SERVER_PORT=3002
-      - SERVER_CONCURRENCY=50
+      - SERVER_CONCURRENCY=25
+      - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
     depends_on:
       - api1
 

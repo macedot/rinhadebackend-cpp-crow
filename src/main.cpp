@@ -30,7 +30,9 @@ int main(void)
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([]() { return "Hello world!"; });
+
     CROW_ROUTE(app, "/contagem-pessoas")([&]() { return getCongatemPessoas(); });
+
     CROW_ROUTE(app, "/pessoas").methods("GET"_method, "POST"_method)([&](const crow::request& req) {
         if (req.method == "POST"_method) {
             return postPessoas(req);
@@ -40,6 +42,7 @@ int main(void)
         }
         return crow::response(HTTP::to_uint(HTTPStatus::BadRequest));
     });
+
     CROW_ROUTE(app, "/pessoas/<string>")
       .methods("GET"_method)([&](const crow::request& req, const std::string& id) {
           if (req.method != "GET"_method) {
@@ -48,18 +51,21 @@ int main(void)
           return getPessoaById(req, id);
       });
 
-    app.loglevel(crow::LogLevel::Error);
+    app.loglevel(crow::LogLevel::Critical);
+
+    const auto SERVER =
+      fmt::format("SERVER(PORT={};CONCURRENCY={})", SERVER_PORT, SERVER_CONCURRENCY);
 
     try {
-        std::cout << fmt::format(
-          "API: START; SERVER_PORT={}; SERVER_CONCURRENCY={};\n", SERVER_PORT, SERVER_CONCURRENCY);
+        std::cout << SERVER << ": START\n";
         app.port(SERVER_PORT).concurrency(SERVER_CONCURRENCY).run();
-        std::cout << "API: STOP;\n";
+        std::cout << SERVER << ": STOP\n";
     }
     catch (const std::exception& e) {
-        std::cerr << "std::exception:" << e.what() << std::endl;
+        std::cerr << SERVER << ": Exception: " << e.what() << std::endl;
     }
 
     pq_conn_pool::instance()->release_pool();
-    std::cout << "API: DONE;\n";
+
+    std::cout << SERVER << ": DONE\n";
 }

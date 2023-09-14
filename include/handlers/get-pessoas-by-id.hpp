@@ -40,12 +40,12 @@ auto selectPessoaById(crow::json::wvalue& pessoa, const std::string& id) -> int
         nrow = res.size();
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << __func__ << ": " << ex.what();
+        CROW_LOG_CRITICAL << __func__ << ": " << ex.what();
         nrow = -1;
     }
 
     instance->unburrow(dbconn);
-    return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
+    return (nrow > 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::InternalServerError);
 }
 
 auto getPessoaById(const crow::request& req, const std::string& id) -> crow::response

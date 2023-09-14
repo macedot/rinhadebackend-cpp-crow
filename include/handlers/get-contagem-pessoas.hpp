@@ -21,12 +21,12 @@ auto selectCountPessoas(int64_t& count) -> int64_t
         }
     }
     catch (const std::exception& ex) {
-        CROW_LOG_ERROR << __func__ << ": " << ex.what();
+        CROW_LOG_CRITICAL << __func__ << ": " << ex.what();
         count = -1;
     }
 
     instance->unburrow(dbconn);
-    return (count >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::NotFound);
+    return (count >= 0) ? HTTP::to_uint(HTTPStatus::OK) : HTTP::to_uint(HTTPStatus::InternalServerError);
 }
 
 auto getCongatemPessoas() -> crow::response
